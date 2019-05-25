@@ -22,34 +22,43 @@ def trace_path(artist1, artist2, parents):
 	return path
 
 
-# async def worker(task_queue):
-# 	while True:
-# 		task = await task_queue.get()
-#
-# 		task_queue.task_done()
-
 # find a shortest path through related artists from artist1
 async def bfs(client, artist1, artist2):
 	# track parents to trace final path
 	parent = {}
 	found = False
 	queue = [artist1]
-	visited = []
+	queue_ids = set()
+	queue_ids.add(artist1.id)
+	visited = set()
 	while queue and not found:
 		current_artist = queue.pop(0)
+		queue_ids.remove(current_artist.id)
+		# if current_artist.name in parent:
+		# 	print(parent[current_artist.name] + "->" + current_artist.name)
+		# else:
+		# 	print(current_artist.name)
 		if current_artist.id == artist2.id:
 			found = True
 			break
-		if current_artist not in visited:
-			related_artists = await current_artist.related_artists()
+		if current_artist.id not in visited:
+			# run parallel requests for all related artists at same level (have same parent)
+			loop = asyncio.get_event_loop()
+			promise = await loop.run_in_executor(None, current_artist.related_artists)
+			related_artists = await promise
 			for a in related_artists:
 				if not a.name in parent:
 					parent[a.name] = current_artist.name
-				queue.append(a)
-			visited.append(current_artist.id)
+				if not a.id in visited and not a.id in queue_ids:
+					queue.append(a)
+					queue_ids.add(a.id)
+			visited.add(current_artist.id)
 
 	if found:
 		return trace_path(artist1, artist2, parent)
+
+	else:
+		return False
 
 
 async def main():
@@ -66,8 +75,16 @@ async def main():
 	if client_ID and client_secret:
 		client = spotify.Client(client_ID, client_secret)
 
-		artist1_name = input("Enter an artist: ")
-		artist2_name = input("Enter another artist: ")
+		artist1_name = ""
+		artist2_name = ""
+
+		# allow command line input instead of console
+		if len(sys.argv) == 1:
+			artist1_name = input("Enter an artist: ")
+			artist2_name = input("Enter another artist: ")
+		else:
+			artist1_name = sys.argv[1]
+			artist2_name = sys.argv[2]
 
 		artist1 = await get_artist(client, artist1_name)
 		artist2 = await get_artist(client, artist2_name)
@@ -75,7 +92,10 @@ async def main():
 		print("Calculating...")
 
 		path = await bfs(client, artist1, artist2)
-		print(path)
+		if path:
+			print(path)
+		else:
+			print("No connection found!")
 
 		await client.close()
 	else:
