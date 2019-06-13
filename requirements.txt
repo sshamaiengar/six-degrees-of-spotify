@@ -6,6 +6,7 @@ chardet==3.0.4
 idna==2.8
 idna-ssl==1.1.0
 multidict==4.5.2
+redis==3.2.1
 requests==2.22.0
 spotify==0.3.0
 typing-extensions==3.7.2

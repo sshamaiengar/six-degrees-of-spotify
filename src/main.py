@@ -2,18 +2,34 @@ import spotify
 import asyncio
 import sys
 import os
+import src.cache as cache
+import redis
+import src.clients as clients
+from functools import partial
+
+# TODO: define classes or something so that redis and spotify client can be referenced nicely
 
 
 # returns an Artist object
-async def get_artist(client, name):
-	res = await client.search(name, types=['artist'])
+async def get_artist(name):
+	res = await clients.spotify.search(name, types=['artist'])
 
 	# assume first result is desired result
 	try:
-		artist = await client.get_artist(str(res['artists'][0]))
+		artist = await clients.spotify.get_artist(str(res['artists'][0]))
 	except IndexError as e:
 		return False
 	return artist
+
+
+async def get_related_artists(artist_id):
+	if not clients.redis or not cache.get_related_artists(artist_id):
+		related = await clients.spotify.http.artist_related_artists(artist_id)
+		related_ids = [a['id'] for a in related['artists']]
+		cache.store_related_artists(artist_id, related_ids)
+		return related_ids
+	else:
+		return cache.get_related_artists(artist_id)
 
 
 # returns a path of artist IDs from artist1 to artist2
@@ -25,99 +41,97 @@ def trace_path(artist1, artist2, parents):
 	return path
 
 
-def trace_bi_path(artist1, artist2, parents1, parents2, intersection):
-	path1 = [intersection.name]
-	while path1[-1] != artist1.name:
+async def trace_bi_path(artist1, artist2, parents1, parents2, intersection):
+	path1 = [intersection]
+	while path1[-1] != artist1.id:
 		path1.append(parents1[path1[-1]])
 	path1.reverse()
 
-	path2 = [intersection.name]
-	while path2[-1] != artist2.name:
+	path2 = [intersection]
+	while path2[-1] != artist2.id:
 		path2.append(parents2[path2[-1]])
-	return path1 + path2[1:]
+
+	# all names should already be cached at this point
+	path = path1 + path2[1:]
+	for i in range(len(path)):
+		artist = await clients.spotify.get_artist(path[i])
+		path[i] = artist.name
+	return path
+
 
 # find a shortest path through related artists from artist1
 # using bidirectional bfs to reduce search space
-async def bi_bfs(client, artist1, artist2):
+async def bi_bfs(artist1, artist2):
 	parent1 = {}
 	parent2 = {}
 	found = False
 	intersect = ""
-	queue1 = [artist1]
-	queue2 = [artist2]
-	queue1_ids = set()
-	queue1_ids.add(artist1.id)
-	queue2_ids = set()
-	queue2_ids.add(artist2.id)
+	queue1 = [artist1.id]
+	queue2 = [artist2.id]
+	set1 = set()
+	set1.add(artist1.id)
+	set2 = set()
+	set2.add(artist2.id)
 	visited1 = set()
 	visited2 = set()
 	loop = asyncio.get_event_loop()
 
 	# settings for how often (BFS turns) to display count of artists searched
 	status_counter = 0
-	status_interval = 4
+	status_interval = 50
 	while queue1 and queue2 and not found:
 
 		# take turns from each side
-		# artist1 side
-		current_artist1 = queue1.pop(0)
-		queue1_ids.remove(current_artist1.id)
-		# if current_artist1.name in parent1:
-		# 	print("1: " + parent1[current_artist1.name] + "->" + current_artist1.name)
-		# else:
-		# 	print("1: " + current_artist1.name)
-		if current_artist1.id == artist2.id or current_artist1.id in visited2:
+		current_artist1_id = queue1.pop(0)
+		set1.remove(current_artist1_id)
+		if current_artist1_id == artist2.id or current_artist1_id in visited2:
 			found = True
-			intersect = current_artist1
+			intersect = current_artist1_id
 			break
-		if current_artist1.id not in visited1:
-			promise = await loop.run_in_executor(None, current_artist1.related_artists)
-			related_artists = await promise
-			for a in related_artists:
-				if not a.name in parent1:
-					parent1[a.name] = current_artist1.name
-				if not a.id in visited1 and not a.id in queue1_ids:
-					queue1.append(a)
-					queue1_ids.add(a.id)
-			visited1.add(current_artist1.id)
+		if current_artist1_id not in visited1:
+			promise = await loop.run_in_executor(None, lambda: get_related_artists(current_artist1_id))
+			related_artists_ids = await promise
+			for i in related_artists_ids:
+				if i not in parent1:
+					parent1[i] = current_artist1_id
+				if i not in visited1 and i not in set1:
+					queue1.append(i)
+					set1.add(i)
+			visited1.add(current_artist1_id)
 
-		#artist2 side
-		current_artist2 = queue2.pop(0)
-		queue2_ids.remove(current_artist2.id)
-		# if current_artist2.name in parent2:
-		# 	print("2: " + parent2[current_artist2.name] + "->" + current_artist2.name)
-		# else:
-		# 	print("2: " + current_artist2.name)
-		if current_artist2.id == artist1.id or current_artist2.id in visited1:
+		current_artist2_id = queue2.pop(0)
+		set2.remove(current_artist2_id)
+		if current_artist2_id == artist1.id or current_artist2_id in visited1:
 			found = True
-			intersect = current_artist2
+			intersect = current_artist2_id
 			break
-		if current_artist2.id not in visited2:
-			promise = await loop.run_in_executor(None, current_artist2.related_artists)
-			related_artists = await promise
-			for a in related_artists:
-				if not a.name in parent2:
-					parent2[a.name] = current_artist2.name
-				if not a.id in visited2 and not a.id in queue2_ids:
-					queue2.append(a)
-					queue2_ids.add(a.id)
-			visited2.add(current_artist2.id)
+		if current_artist2_id not in visited2:
+			promise = await loop.run_in_executor(None, lambda: get_related_artists(current_artist2_id))
+			related_artists_ids = await promise
+			for i in related_artists_ids:
+				if i not in parent2:
+					parent2[i] = current_artist2_id
+				if i not in visited2 and i not in set2:
+					queue2.append(i)
+					set2.add(i)
+			visited2.add(current_artist2_id)
 
+		# print progress
 		if status_counter == 0:
 			all_artists = visited1.union(visited2)
-			print("Artists searched: {}".format(len(all_artists)))
+			print("Artists searched: {}".format(len(all_artists)-2))
 		status_counter = (status_counter + 1) % status_interval
 
 	if found:
 		all_artists = visited1.union(visited2)
-		print("Artists searched: {}".format(len(all_artists)))
-		return trace_bi_path(artist1, artist2, parent1, parent2, intersect)
+		print("Artists searched: {}".format(len(all_artists)-2))
+		return await trace_bi_path(artist1, artist2, parent1, parent2, intersect)
 
 	else:
 		return False
 
 
-async def bfs(client, artist1, artist2):
+async def bfs(artist1, artist2):
 	# track parents to trace final path
 	parent = {}
 	found = False
@@ -156,51 +170,63 @@ async def bfs(client, artist1, artist2):
 
 
 async def main():
-	# set client ID and secret in environment variables
-	client_ID = ""
-	client_secret = ""
-	try:
-		client_ID = os.environ.get("SIX_DEGREES_CLIENT_ID")
-		client_secret = os.environ.get("SIX_DEGREES_CLIENT_SECRET")
-	except KeyError as e:
-		print("You must set the client ID and secret in SIX_DEGREES_CLIENT_ID and SIX_DEGREES_CLIENT_SECRET (environment variables)")
+	should_continue = True
+	global clients
+	clients.redis = redis.Redis()
 
-	# get input and run search
-	if client_ID and client_secret:
-		client = spotify.Client(client_ID, client_secret)
+	while should_continue:
 
-		artist1_name = ""
-		artist2_name = ""
+		# set client ID and secret in environment variables
+		client_ID = ""
+		client_secret = ""
+		try:
+			client_ID = os.environ.get("SIX_DEGREES_CLIENT_ID")
+			client_secret = os.environ.get("SIX_DEGREES_CLIENT_SECRET")
+		except KeyError as e:
+			print("You must set the client ID and secret in SIX_DEGREES_CLIENT_ID and SIX_DEGREES_CLIENT_SECRET (environment variables)")
+			break
 
-		# allow command line input instead of console
-		if len(sys.argv) == 1:
-			artist1_name = input("Enter an artist: ")
-			artist2_name = input("Enter another artist: ")
+		# get input and run search
+		if client_ID and client_secret:
+			clients.spotify = spotify.Client(client_ID, client_secret)
+
+			artist1_name = ""
+			artist2_name = ""
+
+			# allow command line input instead of console
+			if len(sys.argv) == 1:
+				artist1_name = input("Enter an artist: ")
+				artist2_name = input("Enter another artist: ")
+
+			artist1 = await get_artist(artist1_name)
+			artist2 = await get_artist(artist2_name)
+
+			if not artist1:
+				print("No artist found named " + artist1_name)
+			if not artist2:
+				print("No artist found named " + artist2_name)
+			if not artist1 or not artist2:
+				sys.exit(1)
+
+			print("Calculating...")
+
+			path = await bi_bfs(artist1, artist2)
+			if path:
+				print(" <-> ".join(path))
+			else:
+				print("No connection found!")
+
+			await clients.spotify.close()
+
+			print()
+			answer = input("Run again? y/n: ")
+			if answer == "y":
+				should_continue = True
+			else:
+				should_continue = False
 		else:
-			artist1_name = sys.argv[1]
-			artist2_name = sys.argv[2]
-
-		artist1 = await get_artist(client, artist1_name)
-		artist2 = await get_artist(client, artist2_name)
-
-		if not artist1:
-			print("No artist found named " + artist1_name)
-		if not artist2:
-			print("No artist found named " + artist2_name)
-		if not artist1 or not artist2:
-			sys.exit(1)
-
-		print("Calculating...")
-
-		path = await bi_bfs(client, artist1, artist2)
-		if path:
-			print(path)
-		else:
-			print("No connection found!")
-
-		await client.close()
-	else:
-		print("Error with client ID and/or secret")
+			print("Error with client ID and/or secret")
+			break
 
 
 if __name__ == '__main__':
