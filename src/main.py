@@ -2,78 +2,71 @@ import spotify
 import asyncio
 import sys
 import os
-import src.cache as cache
 import redis
-import src.clients as clients
-from functools import partial
 import itertools
+from typing import NewType, List, Tuple, Dict, Set
+
+from custom_types import *
+import clients
+import cache
 
 
-# returns an Artist object
-async def get_artist(name):
-	res = await clients.spotify.search(name, types=['artist'])
+async def get_artist(name: str) -> Artist:
+	res = await clients.spotify.search(name, types=['artist'], limit=1)
 
 	# assume first result is desired result
 	try:
-		artist = await clients.spotify.get_artist(str(res['artists'][0]))
+		artist: Artist = await clients.spotify.get_artist(str(res['artists'][0]))
 	except IndexError as e:
 		return False
 	return artist
 
 
-async def get_related_artists(artist_id):
+async def get_related_artists(artist_id: ArtistID) -> List[ArtistID]:
 	if not clients.redis or not cache.get_related_artists(artist_id):
 		related = await clients.spotify.http.artist_related_artists(artist_id)
-		related_ids = [a['id'] for a in related['artists']]
+		related_ids: List[ArtistID] = [a['id'] for a in related['artists']]
 		cache.store_related_artists(artist_id, related_ids)
 		return related_ids
 	else:
 		return cache.get_related_artists(artist_id)
 
 
-# returns a path of artist IDs from artist1 to artist2
-def trace_path(artist1, artist2, parents):
-	path = [artist2.name]
-	while path[-1] != artist1.name:
-		path.append(parents[path[-1]])
-	path.reverse()
-	return path
-
-
-async def trace_bi_path(artist1, artist2, parents1, parents2, intersection):
-	path1 = [intersection]
+async def trace_bi_path(artist1: Artist, artist2: Artist, parents1: Dict[ArtistID, ArtistID], parents2: Dict[ArtistID, ArtistID], intersection) -> Tuple[List[str], List[ArtistID]]:
+	path1: List[ArtistID] = [intersection]
 	while path1[-1] != artist1.id:
 		path1.append(parents1[path1[-1]])
 	path1.reverse()
 
-	path2 = [intersection]
+	path2: List[ArtistID] = [intersection]
 	while path2[-1] != artist2.id:
 		path2.append(parents2[path2[-1]])
 
 	# all names should already be cached at this point
-	path = path1 + path2[1:]
-	for i in range(len(path)):
-		artist = await clients.spotify.get_artist(path[i])
-		path[i] = artist.name
-	return path
+	id_path: List[ArtistID] = path1 + path2[1:]
+	name_path: List[str] = ["" for i in id_path]
+	for i in range(len(id_path)):
+		artist = await clients.spotify.get_artist(id_path[i])
+		name_path[i] = artist.name
+	return name_path, id_path
 
 
 # find a shortest path through related artists from artist1
 # using bidirectional bfs to reduce search space
-async def bi_bfs(artist1, artist2):
-	print_progress= False
-	parent1 = {}
-	parent2 = {}
+async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[str], List[ArtistID], int]:
+	print_progress = False
+	parent1: Dict[ArtistID, ArtistID] = {}
+	parent2: Dict[ArtistID, ArtistID] = {}
 	found = False
-	intersect = ""
-	queue1 = [artist1.id]
-	queue2 = [artist2.id]
+	intersect: ArtistID = ""
+	queue1: List[ArtistID] = [artist1.id]
+	queue2: List[ArtistID] = [artist2.id]
 	set1 = set()
 	set1.add(artist1.id)
 	set2 = set()
 	set2.add(artist2.id)
-	visited1 = set()
-	visited2 = set()
+	visited1: Set[ArtistID] = set()
+	visited2: Set[ArtistID] = set()
 	loop = asyncio.get_event_loop()
 
 	# settings for how often (BFS turns) to display count of artists searched
@@ -82,7 +75,7 @@ async def bi_bfs(artist1, artist2):
 	while queue1 and queue2 and not found:
 
 		# take turns from each side
-		current_artist1_id = queue1.pop(0)
+		current_artist1_id: ArtistID = queue1.pop(0)
 		set1.remove(current_artist1_id)
 		if current_artist1_id == artist2.id or current_artist1_id in visited2:
 			found = True
@@ -90,7 +83,7 @@ async def bi_bfs(artist1, artist2):
 			break
 		if current_artist1_id not in visited1:
 			promise = await loop.run_in_executor(None, lambda: get_related_artists(current_artist1_id))
-			related_artists_ids = await promise
+			related_artists_ids: List[ArtistID] = await promise
 			for i in related_artists_ids:
 				if i not in parent1:
 					parent1[i] = current_artist1_id
@@ -99,7 +92,7 @@ async def bi_bfs(artist1, artist2):
 					set1.add(i)
 			visited1.add(current_artist1_id)
 
-		current_artist2_id = queue2.pop(0)
+		current_artist2_id: ArtistID = queue2.pop(0)
 		set2.remove(current_artist2_id)
 		if current_artist2_id == artist1.id or current_artist2_id in visited1:
 			found = True
@@ -107,7 +100,7 @@ async def bi_bfs(artist1, artist2):
 			break
 		if current_artist2_id not in visited2:
 			promise = await loop.run_in_executor(None, lambda: get_related_artists(current_artist2_id))
-			related_artists_ids = await promise
+			related_artists_ids: List[ArtistID] = await promise
 			for i in related_artists_ids:
 				if i not in parent2:
 					parent2[i] = current_artist2_id
@@ -126,53 +119,15 @@ async def bi_bfs(artist1, artist2):
 	if found:
 		all_artists = visited1.union(visited2)
 		print("Artists searched: {}".format(len(all_artists)-2))
-		return await trace_bi_path(artist1, artist2, parent1, parent2, intersect)
+		paths: Tuple[List[str], List[ArtistID]] = await trace_bi_path(artist1, artist2, parent1, parent2, intersect)
+		return paths[0], paths[1], len(all_artists)
 
 	else:
-		return False
-
-
-async def bfs(artist1, artist2):
-	# track parents to trace final path
-	parent = {}
-	found = False
-	queue = [artist1]
-	queue_ids = set()
-	queue_ids.add(artist1.id)
-	visited = set()
-	while queue and not found:
-		current_artist = queue.pop(0)
-		queue_ids.remove(current_artist.id)
-		if current_artist.name in parent:
-			print(parent[current_artist.name] + "->" + current_artist.name)
-		else:
-			print(current_artist.name)
-		if current_artist.id == artist2.id:
-			found = True
-			break
-		if current_artist.id not in visited:
-			# run parallel requests for all related artists at same level (have same parent)
-			loop = asyncio.get_event_loop()
-			promise = await loop.run_in_executor(None, current_artist.related_artists)
-			related_artists = await promise
-			for a in related_artists:
-				if not a.name in parent:
-					parent[a.name] = current_artist.name
-				if not a.id in visited and not a.id in queue_ids:
-					queue.append(a)
-					queue_ids.add(a.id)
-			visited.add(current_artist.id)
-
-	if found:
-		return trace_path(artist1, artist2, parent)
-
-	else:
-		return False
+		return [], [], 0
 
 
 async def main():
 	should_continue = True
-	global clients
 	clients.redis = redis.Redis()
 
 	while should_continue:
@@ -209,11 +164,14 @@ async def main():
 			if not artist1 or not artist2:
 				sys.exit(1)
 
+			print(artist1.id)
+			print(artist2.id)
+
 			print("Calculating...")
 
-			path = await bi_bfs(artist1, artist2)
-			if path:
-				print(" <-> ".join(path))
+			name_path, _, _ = await bi_bfs(artist1, artist2)
+			if name_path:
+				print(" <-> ".join(name_path))
 			else:
 				print("No connection found!")
 
@@ -231,7 +189,6 @@ async def main():
 
 
 async def run_with_artists(list1, list2):
-	global clients
 	clients.redis = redis.Redis()
 
 	# set spotify client ID and secret in environment variables
@@ -252,9 +209,9 @@ async def run_with_artists(list1, list2):
 		for p in pairs:
 			artist1 = await get_artist(p[0])
 			artist2 = await get_artist(p[1])
-			path = await bi_bfs(artist1, artist2)
-			if path:
-				print(artist1.name+"..."+artist2.name+": " + " <-> ".join(path))
+			name_path, _, _ = await bi_bfs(artist1, artist2)
+			if name_path:
+				print(artist1.name+"..."+artist2.name+": " + " <-> ".join(name_path))
 			else:
 				print(artist1.name+"..."+artist2.name+": no connection")
 

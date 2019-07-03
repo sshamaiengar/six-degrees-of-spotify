@@ -1,24 +1,25 @@
-import redis
-import spotify
-import src.clients as clients
+from typing import List
+from custom_types import *
+import clients
 
 
 # cache artist names
-def get_artist_name(artist):
+def get_artist_name(artist: Artist) -> str:
 	if not clients.redis:
-		return False
-	val = clients.redis.get(artist.id+':name')
+		return ""
+	val: bytes = clients.redis.get(artist.id+':name')
 	if not val:
-		return False
+		return ""
 	else:
 		return str(val, 'utf-8')
 
 
-def store_artist_name(artist):
+def store_artist_name(artist: Artist) -> bool:
 	if not clients.redis:
 		return False
 	if not clients.redis.get(artist.id + ':name'):
 		clients.redis.set(artist.id+':name', artist.name)
+		return True
 	else:
 		return False
 
@@ -26,24 +27,29 @@ def store_artist_name(artist):
 # cache related artists for a given artist
 # if in cache, return value
 # else, return False
-def get_related_artists(artist_id):
+def get_related_artists(artist_id: ArtistID) -> List[ArtistID]:
 	if not clients.redis:
-		return False
+		return []
 
-	val = clients.redis.lrange(artist_id, 0, -1)
+	val: List[bytes] = clients.redis.lrange(artist_id, 0, -1)
 	if not val:
-		return False
+		return []
 	else:
-		return [str(id, 'utf-8') for id in val]
+		res: List[ArtistID] = []
+		for id in val:
+			str_id: ArtistID = str(id, 'utf-8')
+			res.append(str_id)
+		return res
 
 
 # given an artist ID and list of related Artist objects, store in cache
-def store_related_artists(artist_id, related_artists_ids):
+def store_related_artists(artist_id: ArtistID, related_artists_ids: List[ArtistID]) -> bool:
 	if not clients.redis:
 		return False
 	if not clients.redis.lrange(artist_id, 0, -1):
 		for i in related_artists_ids:
 			clients.redis.rpush(artist_id, i)
+		return True
 	else:
 		return False
 
@@ -51,26 +57,26 @@ def store_related_artists(artist_id, related_artists_ids):
 # cache paths given two artists (key is "artist1:artist2"
 # if in cache, return values
 # else, return False
-def get_path(artistA_id, artistB_id):
+def get_path(artistA_id: ArtistID, artistB_id: ArtistID) -> List[ArtistID]:
 	if not clients.redis:
-		return False
+		return []
 	# sort to store paths symmetrically (A->B equals B->A)
 	artist1_id, artist2_id = sorted([artistA_id, artistB_id])
 	reverse = False
 	if artist2_id == artistA_id:
 		reverse = True
-	val = clients.redis.lrange(artist1_id + ":" + artist2_id, 0, -1)
+	val: List[bytes] = clients.redis.lrange(artist1_id + ":" + artist2_id, 0, -1)
 	if not val:
-		return False
+		return []
 	else:
-		result = [str(id, 'utf-8') for id in val]
+		result: List[ArtistID] = [str(id, 'utf-8') for id in val]
 		if reverse:
 			return result[::-1]
 		else:
 			return result
 
 
-def store_path(artistA_id, artistB_id, path):
+def store_path(artistA_id: ArtistID, artistB_id: ArtistID, path: List[ArtistID]) -> bool:
 	if not clients.redis:
 		return False
 	artist1_id, artist2_id = sorted([artistA_id, artistB_id])
@@ -78,7 +84,8 @@ def store_path(artistA_id, artistB_id, path):
 	if artist2_id == artistA_id:
 		path = path[::-1]
 	if not clients.redis.lrange(artist1_id + ":" + artist2_id, 0, -1):
-		for a in path:
-			clients.redis.rpush(artist1_id, a.id)
+		for ai in path:
+			clients.redis.rpush(artist1_id, ai)
+		return True
 	else:
 		return False
