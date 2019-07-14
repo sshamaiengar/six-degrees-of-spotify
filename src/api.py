@@ -3,8 +3,10 @@ import json
 from main import *
 import clients
 from custom_types import *
+from quart_cors import cors
 
 app = Quart(__name__)
+app = cors(app)
 
 
 # route for getting path given artist IDs
@@ -34,6 +36,9 @@ async def search_artists(artist_name):
 		artist['name'] = a.name
 		artist['id'] = a.id
 		artist['images'] = a.images
+		artist['url'] = 'open.spotify.com/artist/' + a.id;
+		artist['genres'] = a.genres
+		artist['followers'] = a.followers
 		artist_dicts.append(artist)
 	res = artist_dicts
 	return Response(json.dumps(res), mimetype='text/json')
