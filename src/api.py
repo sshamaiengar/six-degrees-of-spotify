@@ -32,13 +32,7 @@ async def search_artists(artist_name):
 	artists: List[Artist] = results['artists']
 	artist_dicts: List[Dict] = []
 	for a in artists:
-		artist: Dict = {}
-		artist['name'] = a.name
-		artist['id'] = a.id
-		artist['images'] = a.images
-		artist['url'] = 'open.spotify.com/artist/' + a.id;
-		artist['genres'] = a.genres
-		artist['followers'] = a.followers
+		artist: Dict = generate_artist_dict(a)
 		artist_dicts.append(artist)
 	res = artist_dicts
 	return Response(json.dumps(res), mimetype='text/json')
@@ -47,25 +41,23 @@ async def search_artists(artist_name):
 @app.route('/api/artist/<artist_id>', methods=['GET'])
 async def get_artist(artist_id):
 	artist: Artist = await clients.spotify.get_artist(artist_id)
-	artist_dict: Dict = {}
-	artist_dict['name'] = artist.name
-	artist_dict['images'] = artist.images
-	artist_dict['url'] = 'open.spotify.com/artist/' + artist.id;
-	artist_dict['genres'] = artist.genres
-	artist_dict['followers'] = artist.followers
+	artist_dict: Dict = generate_artist_dict(artist)
 	return Response(json.dumps(artist_dict), mimetype='text/json')
 
 
 async def get_artist_dict(artist_id):
 	artist: Artist = await clients.spotify.get_artist(artist_id)
+	return generate_artist_dict(artist)
+
+def generate_artist_dict(artist):
 	artist_dict: Dict = {}
 	artist_dict['name'] = artist.name
 	artist_dict['images'] = artist.images
 	artist_dict['url'] = 'open.spotify.com/artist/' + artist.id;
 	artist_dict['genres'] = artist.genres
 	artist_dict['followers'] = artist.followers
+	artist_dict['id'] = artist.id
 	return artist_dict
-
 
 if __name__ == '__main__':
 	clients.redis = redis.Redis()
