@@ -14,7 +14,7 @@ app = cors(app)
 async def find_connections(artist1_id, artist2_id):
 	artist1: Artist = await clients.spotify.get_artist(artist1_id)
 	artist2: Artist = await clients.spotify.get_artist(artist2_id)
-	name_path, id_path, artists_searched = await bi_bfs(artist1, artist2)
+	id_path, artists_searched = await bi_bfs(artist1, artist2)
 	artist_dicts = []
 	for i in id_path:
 		artist_dict = await get_artist_dict(i)

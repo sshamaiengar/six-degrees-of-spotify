@@ -32,7 +32,23 @@ async def get_related_artists(artist_id: ArtistID) -> List[ArtistID]:
 		return cache.get_related_artists(artist_id)
 
 
-async def trace_bi_path(artist1: Artist, artist2: Artist, parents1: Dict[ArtistID, ArtistID], parents2: Dict[ArtistID, ArtistID], intersection) -> Tuple[List[str], List[ArtistID]]:
+# for edge case where artist1/2 or is in queue of opposite side when intersection is found
+async def trace_path(artist1: Artist, artist2: Artist, parents1: Dict[ArtistID, ArtistID], parents2: Dict[ArtistID, ArtistID]) -> Tuple[List[str], List[ArtistID]]:
+	# artist1 is the one found from the opposite side
+	path = []
+	if artist1.id in parents2:
+		path = [artist1.id]
+		while path[-1] != artist2.id:
+			path.append(parents2[path[-1]])
+	elif artist2.id in parents1:
+		path = [artist2.id]
+		while path[-1] != artist1.id:
+			path.append(parents1[path[-1]])
+		path.reverse()
+	return path
+
+
+async def trace_bi_path(artist1: Artist, artist2: Artist, parents1: Dict[ArtistID, ArtistID], parents2: Dict[ArtistID, ArtistID], intersection) ->  List[ArtistID]:
 	path1: List[ArtistID] = [intersection]
 	while path1[-1] != artist1.id:
 		path1.append(parents1[path1[-1]])
@@ -44,16 +60,20 @@ async def trace_bi_path(artist1: Artist, artist2: Artist, parents1: Dict[ArtistI
 
 	# all names should already be cached at this point
 	id_path: List[ArtistID] = path1 + path2[1:]
+	return id_path
+
+
+async def get_name_path(id_path: List[ArtistID]) -> List[str]:
 	name_path: List[str] = ["" for i in id_path]
 	for i in range(len(id_path)):
 		artist = await clients.spotify.get_artist(id_path[i])
 		name_path[i] = artist.name
-	return name_path, id_path
+	return name_path
 
 
 # find a shortest path through related artists from artist1
 # using bidirectional bfs to reduce search space
-async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[str], List[ArtistID], int]:
+async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[ArtistID], int]:
 	print_progress = False
 	parent1: Dict[ArtistID, ArtistID] = {}
 	parent2: Dict[ArtistID, ArtistID] = {}
@@ -69,6 +89,10 @@ async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[str], List[Arti
 	visited2: Set[ArtistID] = set()
 	loop = asyncio.get_event_loop()
 
+	# edge case where artist1/2 or is in queue of opposite side when intersection is found
+	# so intersection should be ignored
+	one_way_edge_case = False
+
 	# settings for how often (BFS turns) to display count of artists searched
 	status_counter = 0
 	status_interval = 50
@@ -80,6 +104,8 @@ async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[str], List[Arti
 		if current_artist1_id == artist2.id or current_artist1_id in visited2:
 			found = True
 			intersect = current_artist1_id
+			if artist1.id in queue2 or artist2.id in queue1:
+				one_way_edge_case = True
 			break
 		if current_artist1_id not in visited1:
 			promise = await loop.run_in_executor(None, lambda: get_related_artists(current_artist1_id))
@@ -97,6 +123,8 @@ async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[str], List[Arti
 		if current_artist2_id == artist1.id or current_artist2_id in visited1:
 			found = True
 			intersect = current_artist2_id
+			if artist1.id in queue2 or artist2.id in queue1:
+				one_way_edge_case = True
 			break
 		if current_artist2_id not in visited2:
 			promise = await loop.run_in_executor(None, lambda: get_related_artists(current_artist2_id))
@@ -118,12 +146,17 @@ async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[str], List[Arti
 
 	if found:
 		all_artists = visited1.union(visited2)
-		print("Artists searched: {}".format(len(all_artists)-2))
-		paths: Tuple[List[str], List[ArtistID]] = await trace_bi_path(artist1, artist2, parent1, parent2, intersect)
-		return paths[0], paths[1], len(all_artists)
+		# print("Artists searched: {}".format(len(all_artists)-2))
+		path: List[ArtistID] = await trace_bi_path(artist1, artist2, parent1, parent2, intersect)
+		if one_way_edge_case:
+			path2: List[ArtistID] = await trace_path(artist1, artist2, parent1, parent2)
+			if len(path2) < len(path):
+				path = path2[:]
+		# if one_way_edge_case, check for one_way_path and compare length with bi_path. Return shorter
+		return path, len(all_artists)
 
 	else:
-		return [], [], 0
+		return [], 0
 
 
 async def main():
@@ -169,7 +202,8 @@ async def main():
 
 			print("Calculating...")
 
-			name_path, _, _ = await bi_bfs(artist1, artist2)
+			id_path, _ = await bi_bfs(artist1, artist2)
+			name_path = await get_name_path(id_path)
 			if name_path:
 				print(" <-> ".join(name_path))
 			else:
@@ -209,7 +243,8 @@ async def run_with_artists(list1, list2):
 		for p in pairs:
 			artist1 = await get_artist(p[0])
 			artist2 = await get_artist(p[1])
-			name_path, _, _ = await bi_bfs(artist1, artist2)
+			id_path, _ = await bi_bfs(artist1, artist2)
+			name_path = await get_name_path(id_path)
 			if name_path:
 				print(artist1.name+"..."+artist2.name+": " + " <-> ".join(name_path))
 			else:
