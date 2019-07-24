@@ -5,10 +5,34 @@ import os
 import redis
 import itertools
 from typing import NewType, List, Tuple, Dict, Set
+from time import time
 
 from custom_types import *
 import clients
 import cache
+
+
+def timeit(func):
+	async def process(func, *args, **params):
+		if asyncio.iscoroutinefunction(func):
+			print('this function is a coroutine: {}'.format(func.__name__))
+			return await func(*args, **params)
+		else:
+			print('this is not a coroutine')
+			return func(*args, **params)
+
+	async def helper(*args, **params):
+		print('{}.time'.format(func.__name__))
+		start = time()
+		result = await process(func, *args, **params)
+
+		# Test normal function route...
+		# result = await process(lambda *a, **p: print(*a, **p), *args, **params)
+
+		print('>>>', (time() - start) * 1000, " ms")
+		return result
+
+	return helper
 
 
 async def get_artist(name: str) -> Artist:
