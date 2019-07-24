@@ -76,6 +76,7 @@ def get_path(artistA_id: ArtistID, artistB_id: ArtistID) -> List[ArtistID]:
 			return result
 
 
+# TODO: what about non-existent paths, how to store
 def store_path(artistA_id: ArtistID, artistB_id: ArtistID, path: List[ArtistID]) -> bool:
 	if not clients.redis:
 		return False
@@ -83,9 +84,10 @@ def store_path(artistA_id: ArtistID, artistB_id: ArtistID, path: List[ArtistID])
 	# reverse path if necessary
 	if artist2_id == artistA_id:
 		path = path[::-1]
-	if not clients.redis.lrange(artist1_id + ":" + artist2_id, 0, -1):
+	path_key = artist1_id + ":" + artist2_id
+	if not clients.redis.lrange(path_key, 0, -1):
 		for ai in path:
-			clients.redis.rpush(artist1_id, ai)
+			clients.redis.rpush(path_key, ai)
 		return True
 	else:
 		return False

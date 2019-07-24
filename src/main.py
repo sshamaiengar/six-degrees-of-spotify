@@ -57,7 +57,7 @@ async def get_related_artists(artist_id: ArtistID) -> List[ArtistID]:
 
 
 # for edge case where artist1/2 or is in queue of opposite side when intersection is found
-async def trace_path(artist1: Artist, artist2: Artist, parents1: Dict[ArtistID, ArtistID], parents2: Dict[ArtistID, ArtistID]) -> Tuple[List[str], List[ArtistID]]:
+async def trace_path(artist1: Artist, artist2: Artist, parents1: Dict[ArtistID, ArtistID], parents2: Dict[ArtistID, ArtistID]) -> List[ArtistID]:
 	# artist1 is the one found from the opposite side
 	path = []
 	if artist1.id in parents2:
@@ -98,6 +98,10 @@ async def get_name_path(id_path: List[ArtistID]) -> List[str]:
 # find a shortest path through related artists from artist1
 # using bidirectional bfs to reduce search space
 async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[ArtistID], int]:
+	cached_path = cache.get_path(artist1.id, artist2.id)
+	if cached_path:
+		return cached_path, 0
+
 	print_progress = False
 	parent1: Dict[ArtistID, ArtistID] = {}
 	parent2: Dict[ArtistID, ArtistID] = {}
@@ -176,6 +180,8 @@ async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[ArtistID], int]
 			path2: List[ArtistID] = await trace_path(artist1, artist2, parent1, parent2)
 			if len(path2) < len(path):
 				path = path2[:]
+		if not cache.store_path(artist1.id, artist2.id, path):
+			print("Error storing path. May have already been stored")
 		# if one_way_edge_case, check for one_way_path and compare length with bi_path. Return shorter
 		return path, len(all_artists)
 
