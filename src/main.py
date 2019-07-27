@@ -100,6 +100,8 @@ async def get_name_path(id_path: List[ArtistID]) -> List[str]:
 async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[ArtistID], int]:
 	cached_path = cache.get_path(artist1.id, artist2.id)
 	if cached_path:
+		if cache.store_longest_path(artist1.id, artist2.id, cached_path):
+			print("New longest path")
 		return cached_path, 0
 
 	print_progress = False
@@ -182,6 +184,8 @@ async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[ArtistID], int]
 				path = path2[:]
 		if not cache.store_path(artist1.id, artist2.id, path):
 			print("Error storing path. May have already been stored")
+		if cache.store_longest_path(artist1.id, artist2.id, path):
+			print("New longest path")
 		# if one_way_edge_case, check for one_way_path and compare length with bi_path. Return shorter
 		return path, len(all_artists)
 
