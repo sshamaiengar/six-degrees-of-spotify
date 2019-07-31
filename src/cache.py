@@ -128,8 +128,15 @@ def get_artist_search_count(artist_id: ArtistID) -> int:
 	pass
 
 
-def get_top_artists(max_results: int=5):
-	pass
+def get_top_artists(max_results: int=5) -> List[ArtistID]:
+	artist_data = clients.redis.hgetall(ARTIST_SEARCHES_KEY)
+	artist_pairs = []
+	for k, v in artist_data.items():
+		artist_pairs.append([v,k]) # create pairs [value, key] so value can be sorted
+	artist_pairs.sort(reverse=True)
+	top_artist_ids = [str(p[1],'utf-8') for p in artist_pairs[:max_results]]
+	return top_artist_ids
+
 
 # only do this for unique/new paths
 def increase_artist_search_count(artist_id: ArtistID) -> bool:
@@ -140,15 +147,32 @@ def increase_artist_search_count(artist_id: ArtistID) -> bool:
 
 
 def get_top_connections(max_results: int=5) -> List[str]:
-	pass
+	connection_data = clients.redis.hgetall(CONNECTION_SEARCHES_KEY)
+	connection_pairs = []
+	for k, v in connection_data.items():
+		connection_pairs.append([v, k])  # create pairs [value, key] so value can be sorted
+	connection_pairs.sort(reverse=True)
+	top_connection_keys = [str(p[1], 'utf-8') for p in connection_pairs[:max_results]]
+	return top_connection_keys
 
 
 def get_nonexistent_connections(max_results: int=5) -> List[str]:
-	pass
+	connection_data = clients.redis.hgetall(CONNECTION_LENGTHS_KEY)
+	connection_pairs = []
+	for k, v in connection_data.items():
+		if v == 0:
+			connection_pairs.append(k)  # create pairs [value, key] so value can be sorted
+	nonexistent_connection_keys = [str(i, 'utf-8') for i in connection_pairs[:max_results]]
+	return nonexistent_connection_keys
 
 
-def get_average_connection_length() -> float:
-	pass
+def get_number_connections_searched() -> int:
+	return clients.redis.hlen(CONNECTION_LENGTHS_KEY)
+
+
+def get_average_degrees_of_separation() -> float:
+	connection_lengths = list(map(lambda x: int(x)-1, clients.redis.hvals(CONNECTION_LENGTHS_KEY)))
+	return sum(connection_lengths)/len(connection_lengths)
 
 
 def get_connection_search_count(artist1_id: ArtistID, artist2_id: ArtistID) -> int:

@@ -45,6 +45,48 @@ async def get_artist(artist_id):
 	return Response(json.dumps(artist_dict), mimetype='text/json')
 
 
+@app.route('/api/stats', methods=['GET'])
+async def get_stats():
+	stats = {}
+	stats['top_artists'] = []
+	stats['top_connections'] = []
+	stats['nonexistent_connections'] = []
+
+	top_artist_ids = cache.get_top_artists()
+	for i in top_artist_ids:
+		res = await get_artist_dict(i)
+		stats['top_artists'].append(res)
+
+	top_connection_keys = cache.get_top_connections()
+	for i in top_connection_keys:
+		connection_dict = dict()
+		connection_dict['url'] = i
+		connection_dict['artists'] = []
+		for j in i.split(":"):
+			artist_dict = await get_artist_dict(j)
+			connection_dict['artists'].append(artist_dict)
+		stats['top_connections'].append(connection_dict)
+
+	stats['mean_degrees'] = cache.get_average_degrees_of_separation()
+
+	stats['connections_searched'] = cache.get_number_connections_searched()
+
+	max_degrees_connection = cache.get_longest_path()
+	stats['max_degrees_path'] = {"connection": max_degrees_connection, "degrees": len(max_degrees_connection)-1}
+
+	nonexistent_connection_keys = cache.get_nonexistent_connections()
+	for i in nonexistent_connection_keys:
+		connection_dict = dict()
+		connection_dict['url'] = i
+		connection_dict['artists'] = []
+		for j in i.split(":"):
+			artist_dict = await get_artist_dict(j)
+			connection_dict['artists'].append(artist_dict)
+		stats['nonexistent_connections'].append(connection_dict)
+
+	return Response(json.dumps(stats), mimetype='text/json')
+
+
 async def get_artist_dict(artist_id):
 	artist: Artist = await clients.spotify.get_artist(artist_id)
 	return generate_artist_dict(artist)
