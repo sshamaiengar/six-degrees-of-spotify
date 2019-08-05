@@ -60,7 +60,7 @@ async def get_stats():
 	top_connection_keys = cache.get_top_connections()
 	for i in top_connection_keys:
 		connection_dict = dict()
-		connection_dict['url'] = i
+		connection_dict['url'] = i.replace(":", "/")
 		connection_dict['artists'] = []
 		for j in i.split(":"):
 			artist_dict = await get_artist_dict(j)
@@ -72,12 +72,18 @@ async def get_stats():
 	stats['connections_searched'] = cache.get_number_connections_searched()
 
 	max_degrees_connection = cache.get_longest_path()
-	stats['max_degrees_path'] = {"connection": max_degrees_connection, "degrees": len(max_degrees_connection)-1}
+	# just return the artists that identify the connection
+	artist_ids = [max_degrees_connection[0], max_degrees_connection[-1]]
+	artist_dicts = []
+	for i in artist_ids:
+		res = await get_artist_dict(i)
+		artist_dicts.append(res)
+	stats['max_degrees_path'] = {"artists": artist_dicts, "degrees": len(max_degrees_connection)-1, "url": "/".join(artist_ids)}
 
 	nonexistent_connection_keys = cache.get_nonexistent_connections()
 	for i in nonexistent_connection_keys:
 		connection_dict = dict()
-		connection_dict['url'] = i
+		connection_dict['url'] = i.replace(":", "/")
 		connection_dict['artists'] = []
 		for j in i.split(":"):
 			artist_dict = await get_artist_dict(j)
