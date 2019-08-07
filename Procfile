@@ -1,1 +1,1 @@
-web: gunicorn src.api:app
+web: hypercorn src.wsgi:app

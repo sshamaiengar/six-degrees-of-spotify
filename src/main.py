@@ -7,7 +7,7 @@ import itertools
 from typing import NewType, List, Tuple, Dict, Set
 from time import time
 
-from .custom_types import *
+from src.custom_types import *
 import src.clients as clients
 import src.cache as cache
 

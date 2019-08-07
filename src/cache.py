@@ -1,5 +1,5 @@
 from typing import List, Tuple
-from .custom_types import *
+from src.custom_types import *
 import src.clients as clients
 
 from redis import RedisError
