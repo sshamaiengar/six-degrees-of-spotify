@@ -7,9 +7,9 @@ import itertools
 from typing import NewType, List, Tuple, Dict, Set
 from time import time
 
-from custom_types import *
-import clients
-import cache
+from .custom_types import *
+import src.clients as clients
+import src.cache as cache
 
 
 def timeit(func):

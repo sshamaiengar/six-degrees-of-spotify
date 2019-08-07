@@ -1,6 +1,6 @@
 from typing import List, Tuple
-from custom_types import *
-import clients
+from .custom_types import *
+import src.clients as clients
 
 from redis import RedisError
 

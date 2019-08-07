@@ -1,9 +1,10 @@
 from quart import Quart, Response, abort
 import json
-from main import *
-import clients
-from custom_types import *
 from quart_cors import cors
+
+from .main import *
+import src.clients as clients
+from .custom_types import *
 
 app = Quart(__name__)
 app = cors(app)
