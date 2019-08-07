@@ -2,6 +2,8 @@ from typing import List, Tuple
 from custom_types import *
 import clients
 
+from redis import RedisError
+
 """
 Cache contents:
 
@@ -20,11 +22,20 @@ CONNECTION_SEARCHES_KEY: str = "stats:connection_searches"
 ARTIST_SEARCHES_KEY: str = "stats:artist_searches"
 
 
+# test Redis connection
+def redis_connected():
+	try:
+		res = clients.redis.ping()
+		return True
+	except RedisError:
+		return False
+
+
 # cache related artists for a given artist
 # if in cache, return value
 # else, return False
 def get_related_artists(artist_id: ArtistID) -> List[ArtistID]:
-	if not clients.redis:
+	if not redis_connected():
 		return []
 
 	val: List[bytes] = clients.redis.lrange(artist_id, 0, -1)
@@ -40,7 +51,7 @@ def get_related_artists(artist_id: ArtistID) -> List[ArtistID]:
 
 # given an artist ID and list of related Artist objects, store in cache
 def store_related_artists(artist_id: ArtistID, related_artists_ids: List[ArtistID]) -> bool:
-	if not clients.redis:
+	if not redis_connected():
 		return False
 	if not clients.redis.lrange(artist_id, 0, -1):
 		for i in related_artists_ids:
@@ -63,7 +74,7 @@ def get_connection_key(artistA_id: ArtistID, artistB_id: ArtistID) -> Tuple[str,
 # if in cache, return values
 # else, return False
 def get_path(artistA_id: ArtistID, artistB_id: ArtistID) -> List[ArtistID]:
-	if not clients.redis:
+	if not redis_connected():
 		return []
 	# sort to store paths symmetrically (A->B equals B->A)
 	path_key, reverse = get_connection_key(artistA_id, artistB_id)
@@ -80,7 +91,7 @@ def get_path(artistA_id: ArtistID, artistB_id: ArtistID) -> List[ArtistID]:
 
 # TODO: what about non-existent paths, how to store
 def store_path(artistA_id: ArtistID, artistB_id: ArtistID, path: List[ArtistID]) -> bool:
-	if not clients.redis:
+	if not redis_connected():
 		return False
 	path_key, reverse = get_connection_key(artistA_id, artistB_id)
 	if reverse:
@@ -94,8 +105,8 @@ def store_path(artistA_id: ArtistID, artistB_id: ArtistID, path: List[ArtistID])
 
 
 def get_longest_path() -> List[ArtistID]:
-	if not clients.redis:
-		return False
+	if not redis_connected():
+		return []
 	key = LONGEST_CONNECTION_KEY
 	longest_path_key = str(clients.redis.get(key), 'utf-8')
 	if not longest_path_key:
@@ -108,7 +119,7 @@ def get_longest_path() -> List[ArtistID]:
 
 # stores key of longest path
 def store_longest_path(artist1_id: ArtistID, artist2_id: ArtistID, path: List[ArtistID]) -> bool:
-	if not clients.redis:
+	if not redis_connected():
 		return False
 	key = LONGEST_CONNECTION_KEY
 	longest_path = get_longest_path()
@@ -129,6 +140,8 @@ def get_artist_search_count(artist_id: ArtistID) -> int:
 
 
 def get_top_artists(max_results: int=5) -> List[ArtistID]:
+	if not redis_connected():
+		return []
 	artist_data = clients.redis.hgetall(ARTIST_SEARCHES_KEY)
 	artist_pairs = []
 	for k, v in artist_data.items():
@@ -140,6 +153,8 @@ def get_top_artists(max_results: int=5) -> List[ArtistID]:
 
 # only do this for unique/new paths
 def increase_artist_search_count(artist_id: ArtistID) -> bool:
+	if not redis_connected():
+		return False
 	stat_key = ARTIST_SEARCHES_KEY
 	if clients.redis.hincrby(stat_key, artist_id, 1):
 		return True
@@ -147,6 +162,8 @@ def increase_artist_search_count(artist_id: ArtistID) -> bool:
 
 
 def get_top_connections(max_results: int=5) -> List[str]:
+	if not redis_connected():
+		return []
 	connection_data = clients.redis.hgetall(CONNECTION_SEARCHES_KEY)
 	connection_pairs = []
 	for k, v in connection_data.items():
@@ -157,6 +174,8 @@ def get_top_connections(max_results: int=5) -> List[str]:
 
 
 def get_nonexistent_connections(max_results: int=5) -> List[str]:
+	if not redis_connected():
+		return []
 	connection_data = clients.redis.hgetall(CONNECTION_LENGTHS_KEY)
 	connection_pairs = []
 	for k, v in connection_data.items():
@@ -167,11 +186,17 @@ def get_nonexistent_connections(max_results: int=5) -> List[str]:
 
 
 def get_number_connections_searched() -> int:
+	if not redis_connected():
+		return -1
 	return clients.redis.hlen(CONNECTION_LENGTHS_KEY)
 
 
 def get_average_degrees_of_separation() -> float:
+	if not redis_connected():
+		return 0
 	connection_lengths = list(map(lambda x: int(x)-1, clients.redis.hvals(CONNECTION_LENGTHS_KEY)))
+	if len(connection_lengths) == 0:
+		return 0
 	return sum(connection_lengths)/len(connection_lengths)
 
 
@@ -180,6 +205,8 @@ def get_connection_search_count(artist1_id: ArtistID, artist2_id: ArtistID) -> i
 
 
 def increase_connection_search_count(artist1_id: ArtistID, artist2_id: ArtistID) -> bool:
+	if not redis_connected():
+		return False
 	stat_key = CONNECTION_SEARCHES_KEY
 	connection_key, _ = get_connection_key(artist1_id, artist2_id)
 	if clients.redis.hincrby(stat_key, connection_key, 1):
@@ -192,6 +219,8 @@ def get_connection_length(artist1_id: ArtistID, artist2_id: ArtistID) -> int:
 
 
 def store_connection_length(artist1_id: ArtistID, artist2_id: ArtistID, path: List[ArtistID]) -> bool:
+	if not redis_connected():
+		return False
 	stat_key = CONNECTION_LENGTHS_KEY
 	connection_key, _ = get_connection_key(artist1_id, artist2_id)
 	if clients.redis.hset(stat_key, connection_key, len(path)):
@@ -202,6 +231,8 @@ def store_connection_length(artist1_id: ArtistID, artist2_id: ArtistID, path: Li
 
 # all stats to run when new unique connection is found
 def new_connection_stats(artist1_id: ArtistID, artist2_id: ArtistID, path: List[ArtistID]) -> bool:
+	if not redis_connected():
+		return False
 	good = True
 	if not store_path(artist1_id, artist2_id, path):
 		print("Error storing path. May have already been stored")
@@ -225,6 +256,8 @@ def new_connection_stats(artist1_id: ArtistID, artist2_id: ArtistID, path: List[
 
 
 def cached_connection_stats(artist1_id: ArtistID, artist2_id: ArtistID, path: List[ArtistID]) -> bool:
+	if not redis_connected():
+		return False
 	good = True
 	if not increase_connection_search_count(artist1_id, artist2_id):
 		print("Error increasing connection search count")

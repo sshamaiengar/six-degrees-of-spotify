@@ -47,7 +47,7 @@ async def get_artist(name: str) -> Artist:
 
 
 async def get_related_artists(artist_id: ArtistID) -> List[ArtistID]:
-	if not clients.redis or not cache.get_related_artists(artist_id):
+	if not cache.redis_connected() or not cache.get_related_artists(artist_id):
 		related = await clients.spotify.http.artist_related_artists(artist_id)
 		related_ids: List[ArtistID] = [a['id'] for a in related['artists']]
 		cache.store_related_artists(artist_id, related_ids)
@@ -192,8 +192,6 @@ async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[ArtistID], int]
 		# 	print("Error storing path. May have already been stored")
 		if not cache.new_connection_stats(artist1.id, artist2.id, path):
 			print("Error updating new connection stats")
-
-
 		return path, len(all_artists)
 
 	else:

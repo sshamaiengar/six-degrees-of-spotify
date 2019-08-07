@@ -1,4 +1,4 @@
-from quart import Quart, Response
+from quart import Quart, Response, abort
 import json
 from main import *
 import clients
@@ -47,6 +47,10 @@ async def get_artist(artist_id):
 
 @app.route('/api/stats', methods=['GET'])
 async def get_stats():
+	if not cache.redis_connected():
+		error_message = json.dumps({ "message": "Could not connect to Redis server"})
+		abort(500)
+
 	stats = {}
 	stats['top_artists'] = []
 	stats['top_connections'] = []
