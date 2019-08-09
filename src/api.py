@@ -41,7 +41,7 @@ def create_app():
 	# route for getting search results for web app
 	@app.route('/api/search/<artist_name>', methods=['GET'])
 	async def search_artists(artist_name):
-		results = await clients.spotify.search(artist_name, types=['artist'], limit=20)
+		results = await clients.spotify.search(artist_name, types=['artist'], limit="20")
 		artists: List[Artist] = results['artists']
 		artist_dicts: List[Dict] = []
 		for a in artists:
@@ -116,10 +116,14 @@ async def get_artist_dict(artist_id):
 	return generate_artist_dict(artist)
 
 
+def get_image_dicts(images):
+	return [{ "url": i.url, "width":i.width, "height": i.height} for i in images]
+
+
 def generate_artist_dict(artist):
 	artist_dict: Dict = {}
 	artist_dict['name'] = artist.name
-	artist_dict['images'] = artist.images
+	artist_dict['images'] = get_image_dicts(artist.images)
 	artist_dict['url'] = 'open.spotify.com/artist/' + artist.id
 	artist_dict['genres'] = artist.genres
 	artist_dict['followers'] = artist.followers
