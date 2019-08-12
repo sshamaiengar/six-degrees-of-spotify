@@ -1,6 +1,8 @@
 from quart import Quart, Response, abort
 import json
 from quart_cors import cors
+import urllib.parse as urlparse
+
 
 from src.main import *
 import src.clients as clients
@@ -13,12 +15,13 @@ import spotify.sync as spotify
 def init_clients():
 	redis_url = None
 	try:
-		redis_url = os.environ['REDIS_URL']
+		redis_url = os.environ['REDISCLOUD_URL']
 	except KeyError as e:
 		pass
 
 	if redis_url:
-		clients.redis = redis.from_url(redis_url)
+		url = urlparse.urlparse(redis_url)
+		clients.redis = redis.Redis(host=url.hostname, port=url.port, password=url.password)
 	else:
 		clients.redis = redis.Redis()
 
