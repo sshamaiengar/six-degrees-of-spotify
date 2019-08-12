@@ -11,7 +11,17 @@ import spotify.sync as spotify
 
 
 def init_clients():
-	clients.redis = redis.Redis()
+	redis_url = None
+	try:
+		redis_url = os.environ['REDIS_URL']
+	except KeyError as e:
+		pass
+
+	if redis_url:
+		clients.redis = redis.from_url(redis_url)
+	else:
+		clients.redis = redis.Redis()
+
 	client_ID = None
 	client_secret = None
 	try:
