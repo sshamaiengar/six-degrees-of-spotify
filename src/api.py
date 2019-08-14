@@ -7,9 +7,6 @@ import urllib.parse as urlparse
 from src.main import *
 import src.clients as clients
 from src.custom_types import *
-import redis
-import asyncio
-import spotify.sync as spotify
 
 
 def init_clients():
@@ -56,8 +53,8 @@ def create_app():
 	# route for getting path given artist IDs
 	@app.route('/api/connect/<artist1_id>/<artist2_id>', methods=['GET'])
 	async def find_connections(artist1_id, artist2_id):
-		artist1: Artist = clients.spotify.get_artist(artist1_id)
-		artist2: Artist = clients.spotify.get_artist(artist2_id)
+		artist1: Artist = await clients.spotify.get_artist(artist1_id)
+		artist2: Artist = await clients.spotify.get_artist(artist2_id)
 		id_path, artists_searched = await bi_bfs(artist1, artist2)
 		artist_dicts = []
 		for i in id_path:
@@ -71,7 +68,7 @@ def create_app():
 	# route for getting search results for web app
 	@app.route('/api/search/<artist_name>', methods=['GET'])
 	async def search_artists(artist_name):
-		results = clients.spotify.search(artist_name, types=['artist'], limit="20")
+		results = await clients.spotify.search(artist_name, types=['artist'], limit="20")
 		artists: List[Artist] = results['artists']
 		artist_dicts: List[Dict] = []
 		for a in artists:
@@ -83,7 +80,7 @@ def create_app():
 	# route for getting one artist (after path found)
 	@app.route('/api/artist/<artist_id>', methods=['GET'])
 	async def get_artist(artist_id):
-		artist: Artist = clients.spotify.get_artist(artist_id)
+		artist: Artist = await clients.spotify.get_artist(artist_id)
 		artist_dict: Dict = generate_artist_dict(artist)
 		return Response(json.dumps(artist_dict), mimetype='text/json')
 
@@ -142,7 +139,7 @@ def create_app():
 
 
 async def get_artist_dict(artist_id):
-	artist: Artist = clients.spotify.get_artist(artist_id)
+	artist: Artist = await clients.spotify.get_artist(artist_id)
 	return generate_artist_dict(artist)
 
 

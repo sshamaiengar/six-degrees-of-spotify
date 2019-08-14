@@ -36,11 +36,11 @@ def timeit(func):
 
 
 async def get_artist(name: str) -> Artist:
-	res = clients.spotify.search(name, types=['artist'], limit=1)
+	res = await clients.spotify.search(name, types=['artist'], limit=1)
 
 	# assume first result is desired result
 	try:
-		artist: Artist = clients.spotify.get_artist(str(res['artists'][0]))
+		artist: Artist = await clients.spotify.get_artist(str(res['artists'][0]))
 	except IndexError as e:
 		return False
 	return artist
@@ -48,7 +48,7 @@ async def get_artist(name: str) -> Artist:
 
 async def get_related_artists(artist_id: ArtistID) -> List[ArtistID]:
 	if not cache.redis_connected() or not cache.get_related_artists(artist_id):
-		related = clients.spotify.http.artist_related_artists(artist_id)
+		related = await clients.spotify.http.artist_related_artists(artist_id)
 		related_ids: List[ArtistID] = [a['id'] for a in related['artists']]
 		cache.store_related_artists(artist_id, related_ids)
 		return related_ids
@@ -90,7 +90,7 @@ async def trace_bi_path(artist1: Artist, artist2: Artist, parents1: Dict[ArtistI
 async def get_name_path(id_path: List[ArtistID]) -> List[str]:
 	name_path: List[str] = ["" for i in id_path]
 	for i in range(len(id_path)):
-		artist = clients.spotify.get_artist(id_path[i])
+		artist = await clients.spotify.get_artist(id_path[i])
 		name_path[i] = artist.name
 	return name_path
 
@@ -248,7 +248,7 @@ async def main():
 			else:
 				print("No connection found!")
 
-			clients.spotify.close()
+			await clients.spotify.close()
 
 			print()
 			answer = input("Run again? y/n: ")
@@ -289,7 +289,7 @@ async def run_with_artists(list1, list2):
 			else:
 				print(artist1.name+"..."+artist2.name+": no connection")
 
-		clients.spotify.close()
+		await clients.spotify.close()
 
 
 if __name__ == '__main__':
