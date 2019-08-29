@@ -35,25 +35,25 @@ def timeit(func):
 	return helper
 
 
-async def get_artist(name: str) -> Artist:
-	res = await clients.spotify.search(name, types=['artist'], limit=1)
-
-	# assume first result is desired result
-	try:
-		artist: Artist = await clients.spotify.get_artist(str(res['artists'][0]))
-	except IndexError as e:
-		return False
-	return artist
-
-
-async def get_related_artists(artist_id: ArtistID) -> List[ArtistID]:
-	if not cache.redis_connected() or not cache.get_related_artists(artist_id):
-		related = await clients.spotify.http.artist_related_artists(artist_id)
-		related_ids: List[ArtistID] = [a['id'] for a in related['artists']]
-		cache.store_related_artists(artist_id, related_ids)
-		return related_ids
-	else:
-		return cache.get_related_artists(artist_id)
+# async def get_artist(name: str) -> Artist:
+# 	res = await clients.spotify.search(name, types=['artist'], limit=1)
+#
+# 	# assume first result is desired result
+# 	try:
+# 		artist: Artist = await clients.spotify.get_artist(str(res['artists'][0]))
+# 	except IndexError as e:
+# 		return False
+# 	return artist
+#
+#
+# async def get_related_artists(artist_id: ArtistID) -> List[ArtistID]:
+# 	if not cache.redis_connected() or not cache.get_related_artists(artist_id):
+# 		related = await clients.spotify.http.artist_related_artists(artist_id)
+# 		related_ids: List[ArtistID] = [a['id'] for a in related['artists']]
+# 		cache.store_related_artists(artist_id, related_ids)
+# 		return related_ids
+# 	else:
+# 		return cache.get_related_artists(artist_id)
 
 
 # for edge case where artist1/2 or is in queue of opposite side when intersection is found
@@ -95,107 +95,107 @@ async def get_name_path(id_path: List[ArtistID]) -> List[str]:
 	return name_path
 
 
-# find a shortest path through related artists from artist1
-# using bidirectional bfs to reduce search space
-async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[ArtistID], int]:
-	cached_path = cache.get_path(artist1.id, artist2.id)
-	if cached_path:
-		# if cache.store_longest_path(artist1.id, artist2.id, cached_path):
-		# 	print("New longest path")
-		if not cache.cached_connection_stats(artist1.id, artist2.id, cached_path):
-			print("Error storing cached connection stats")
-		return cached_path, 0
-
-	print_progress = False
-	parent1: Dict[ArtistID, ArtistID] = {}
-	parent2: Dict[ArtistID, ArtistID] = {}
-	found = False
-	intersect: ArtistID = ""
-	queue1: List[ArtistID] = [artist1.id]
-	queue2: List[ArtistID] = [artist2.id]
-	set1 = set()
-	set1.add(artist1.id)
-	set2 = set()
-	set2.add(artist2.id)
-	visited1: Set[ArtistID] = set()
-	visited2: Set[ArtistID] = set()
-	loop = asyncio.get_event_loop()
-
-	# edge case where artist1/2 or is in queue of opposite side when intersection is found
-	# so intersection should be ignored
-	one_way_edge_case = False
-
-	# settings for how often (BFS turns) to display count of artists searched
-	status_counter = 0
-	status_interval = 50
-	while queue1 and queue2 and not found:
-
-		# take turns from each side
-		current_artist1_id: ArtistID = queue1.pop(0)
-		set1.remove(current_artist1_id)
-		if current_artist1_id == artist2.id or current_artist1_id in visited2:
-			found = True
-			intersect = current_artist1_id
-			if artist1.id in queue2 or artist2.id in queue1:
-				one_way_edge_case = True
-			break
-		if current_artist1_id not in visited1:
-			promise = await loop.run_in_executor(None, lambda: get_related_artists(current_artist1_id))
-			related_artists_ids: List[ArtistID] = await promise
-			for i in related_artists_ids:
-				if i not in parent1:
-					parent1[i] = current_artist1_id
-				if i not in visited1 and i not in set1:
-					queue1.append(i)
-					set1.add(i)
-			visited1.add(current_artist1_id)
-
-		current_artist2_id: ArtistID = queue2.pop(0)
-		set2.remove(current_artist2_id)
-		if current_artist2_id == artist1.id or current_artist2_id in visited1:
-			found = True
-			intersect = current_artist2_id
-			if artist1.id in queue2 or artist2.id in queue1:
-				one_way_edge_case = True
-			break
-		if current_artist2_id not in visited2:
-			promise = await loop.run_in_executor(None, lambda: get_related_artists(current_artist2_id))
-			related_artists_ids: List[ArtistID] = await promise
-			for i in related_artists_ids:
-				if i not in parent2:
-					parent2[i] = current_artist2_id
-				if i not in visited2 and i not in set2:
-					queue2.append(i)
-					set2.add(i)
-			visited2.add(current_artist2_id)
-
-		# print progress
-		if print_progress:
-			if status_counter == 0:
-				all_artists = visited1.union(visited2)
-				print("Artists searched: {}".format(len(all_artists)-2))
-			status_counter = (status_counter + 1) % status_interval
-
-	if found:
-		all_artists = visited1.union(visited2)
-		# print("Artists searched: {}".format(len(all_artists)-2))
-		path: List[ArtistID] = await trace_bi_path(artist1, artist2, parent1, parent2, intersect)
-		if one_way_edge_case:
-			path2: List[ArtistID] = await trace_path(artist1, artist2, parent1, parent2)
-			if len(path2) < len(path):
-				path = path2[:]
-
-		# store stats
-		# store length, and initialize count associated with this connection
-		# update count of artists included in searches
-		# if not cache.store_path(artist1.id, artist2.id, path):
-		# 	print("Error storing path. May have already been stored")
-		if not cache.new_connection_stats(artist1.id, artist2.id, path):
-			print("Error updating new connection stats")
-		return path, len(all_artists)
-
-	else:
-		return [], 0
+# # find a shortest path through related artists from artist1
+# # using bidirectional bfs to reduce search space
+# async def bi_bfs(artist1: Artist, artist2: Artist) -> Tuple[List[ArtistID], int]:
+# 	cached_path = cache.get_path(artist1.id, artist2.id)
+# 	if cached_path:
+# 		# if cache.store_longest_path(artist1.id, artist2.id, cached_path):
+# 		# 	print("New longest path")
+# 		if not cache.cached_connection_stats(artist1.id, artist2.id, cached_path):
+# 			print("Error storing cached connection stats")
+# 		return cached_path, 0
+#
+# 	print_progress = False
+# 	parent1: Dict[ArtistID, ArtistID] = {}
+# 	parent2: Dict[ArtistID, ArtistID] = {}
+# 	found = False
+# 	intersect: ArtistID = ""
+# 	queue1: List[ArtistID] = [artist1.id]
+# 	queue2: List[ArtistID] = [artist2.id]
+# 	set1 = set()
+# 	set1.add(artist1.id)
+# 	set2 = set()
+# 	set2.add(artist2.id)
+# 	visited1: Set[ArtistID] = set()
+# 	visited2: Set[ArtistID] = set()
+# 	loop = asyncio.get_event_loop()
+#
+# 	# edge case where artist1/2 or is in queue of opposite side when intersection is found
+# 	# so intersection should be ignored
+# 	one_way_edge_case = False
+#
+# 	# settings for how often (BFS turns) to display count of artists searched
+# 	status_counter = 0
+# 	status_interval = 50
+# 	while queue1 and queue2 and not found:
+#
+# 		# take turns from each side
+# 		current_artist1_id: ArtistID = queue1.pop(0)
+# 		set1.remove(current_artist1_id)
+# 		if current_artist1_id == artist2.id or current_artist1_id in visited2:
+# 			found = True
+# 			intersect = current_artist1_id
+# 			if artist1.id in queue2 or artist2.id in queue1:
+# 				one_way_edge_case = True
+# 			break
+# 		if current_artist1_id not in visited1:
+# 			promise = await loop.run_in_executor(None, lambda: get_related_artists(current_artist1_id))
+# 			related_artists_ids: List[ArtistID] = await promise
+# 			for i in related_artists_ids:
+# 				if i not in parent1:
+# 					parent1[i] = current_artist1_id
+# 				if i not in visited1 and i not in set1:
+# 					queue1.append(i)
+# 					set1.add(i)
+# 			visited1.add(current_artist1_id)
+#
+# 		current_artist2_id: ArtistID = queue2.pop(0)
+# 		set2.remove(current_artist2_id)
+# 		if current_artist2_id == artist1.id or current_artist2_id in visited1:
+# 			found = True
+# 			intersect = current_artist2_id
+# 			if artist1.id in queue2 or artist2.id in queue1:
+# 				one_way_edge_case = True
+# 			break
+# 		if current_artist2_id not in visited2:
+# 			promise = await loop.run_in_executor(None, lambda: get_related_artists(current_artist2_id))
+# 			related_artists_ids: List[ArtistID] = await promise
+# 			for i in related_artists_ids:
+# 				if i not in parent2:
+# 					parent2[i] = current_artist2_id
+# 				if i not in visited2 and i not in set2:
+# 					queue2.append(i)
+# 					set2.add(i)
+# 			visited2.add(current_artist2_id)
+#
+# 		# print progress
+# 		if print_progress:
+# 			if status_counter == 0:
+# 				all_artists = visited1.union(visited2)
+# 				print("Artists searched: {}".format(len(all_artists)-2))
+# 			status_counter = (status_counter + 1) % status_interval
+#
+# 	if found:
+# 		all_artists = visited1.union(visited2)
+# 		# print("Artists searched: {}".format(len(all_artists)-2))
+# 		path: List[ArtistID] = await trace_bi_path(artist1, artist2, parent1, parent2, intersect)
+# 		if one_way_edge_case:
+# 			path2: List[ArtistID] = await trace_path(artist1, artist2, parent1, parent2)
+# 			if len(path2) < len(path):
+# 				path = path2[:]
+#
+# 		# store stats
+# 		# store length, and initialize count associated with this connection
+# 		# update count of artists included in searches
+# 		# if not cache.store_path(artist1.id, artist2.id, path):
+# 		# 	print("Error storing path. May have already been stored")
+# 		if not cache.new_connection_stats(artist1.id, artist2.id, path):
+# 			print("Error updating new connection stats")
+# 		return path, len(all_artists)
+#
+# 	else:
+# 		return [], 0
 
 
 async def main():
