@@ -44,17 +44,30 @@ def init_clients():
 def create_app():
 	app = Quart(__name__)
 	app = cors(app)
+	app.spotify = None
 
 	clients_init = init_clients()
 
 	if not clients_init:
 		print("Error initiating clients")
 
+	@app.before_request
+	def before_request():
+		if not app.spotify:
+			try:
+				client_ID = os.environ.get("SIX_DEGREES_CLIENT_ID")
+				client_secret = os.environ.get("SIX_DEGREES_CLIENT_SECRET")
+			except KeyError as e:
+				print(
+					"You must set the client ID and secret in SIX_DEGREES_CLIENT_ID and SIX_DEGREES_CLIENT_SECRET (environment variables)")
+				return False
+			app.spotify = spotify.Client(client_ID, client_secret)
+
 	# route for getting path given artist IDs
 	@app.route('/api/connect/<artist1_id>/<artist2_id>', methods=['GET'])
 	async def find_connections(artist1_id, artist2_id):
-		artist1: Artist = await clients.spotify.get_artist(artist1_id)
-		artist2: Artist = await clients.spotify.get_artist(artist2_id)
+		artist1: Artist = await app.spotify.get_artist(artist1_id)
+		artist2: Artist = await app.spotify.get_artist(artist2_id)
 		id_path, artists_searched = await bi_bfs(artist1, artist2)
 		artist_dicts = []
 		for i in id_path:
@@ -68,7 +81,7 @@ def create_app():
 	# route for getting search results for web app
 	@app.route('/api/search/<artist_name>', methods=['GET'])
 	async def search_artists(artist_name):
-		results = await clients.spotify.search(artist_name, types=['artist'], limit="20")
+		results = await app.spotify.search(artist_name, types=['artist'], limit="20")
 		artists: List[Artist] = results['artists']
 		artist_dicts: List[Dict] = []
 		for a in artists:
@@ -80,7 +93,7 @@ def create_app():
 	# route for getting one artist (after path found)
 	@app.route('/api/artist/<artist_id>', methods=['GET'])
 	async def get_artist(artist_id):
-		artist: Artist = await clients.spotify.get_artist(artist_id)
+		artist: Artist = await app.spotify.get_artist(artist_id)
 		artist_dict: Dict = generate_artist_dict(artist)
 		return Response(json.dumps(artist_dict), mimetype='text/json')
 
@@ -135,12 +148,11 @@ def create_app():
 
 		return Response(json.dumps(stats), mimetype='text/json')
 
+	async def get_artist_dict(artist_id):
+		artist: Artist = await app.spotify.get_artist(artist_id)
+		return generate_artist_dict(artist)
+
 	return app
-
-
-async def get_artist_dict(artist_id):
-	artist: Artist = await clients.spotify.get_artist(artist_id)
-	return generate_artist_dict(artist)
 
 
 def get_image_dicts(images):
