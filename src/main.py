@@ -87,12 +87,12 @@ async def trace_bi_path(artist1: Artist, artist2: Artist, parents1: Dict[ArtistI
 	return id_path
 
 
-async def get_name_path(id_path: List[ArtistID]) -> List[str]:
-	name_path: List[str] = ["" for i in id_path]
-	for i in range(len(id_path)):
-		artist = await clients.spotify.get_artist(id_path[i])
-		name_path[i] = artist.name
-	return name_path
+# async def get_name_path(id_path: List[ArtistID]) -> List[str]:
+# 	name_path: List[str] = ["" for i in id_path]
+# 	for i in range(len(id_path)):
+# 		artist = await clients.spotify.get_artist(id_path[i])
+# 		name_path[i] = artist.name
+# 	return name_path
 
 
 # # find a shortest path through related artists from artist1
@@ -198,117 +198,117 @@ async def get_name_path(id_path: List[ArtistID]) -> List[str]:
 # 		return [], 0
 
 
-async def main():
-	should_continue = True
-	clients.redis = redis.Redis()
+# async def main():
+# 	should_continue = True
+# 	clients.redis = redis.Redis()
+#
+# 	while should_continue:
+#
+# 		# set client ID and secret in environment variables
+# 		client_ID = ""
+# 		client_secret = ""
+# 		try:
+# 			client_ID = os.environ.get("SIX_DEGREES_CLIENT_ID")
+# 			client_secret = os.environ.get("SIX_DEGREES_CLIENT_SECRET")
+# 		except KeyError as e:
+# 			print("You must set the client ID and secret in SIX_DEGREES_CLIENT_ID and SIX_DEGREES_CLIENT_SECRET (environment variables)")
+# 			break
+#
+# 		# get input and run search
+# 		if client_ID and client_secret:
+# 			clients.spotify = spotify.Client(client_ID, client_secret)
+#
+# 			artist1_name = ""
+# 			artist2_name = ""
+#
+# 			# allow command line input instead of console
+# 			if len(sys.argv) == 1:
+# 				artist1_name = input("Enter an artist: ")
+# 				artist2_name = input("Enter another artist: ")
+#
+# 			artist1 = await get_artist(artist1_name)
+# 			artist2 = await get_artist(artist2_name)
+#
+# 			if not artist1:
+# 				print("No artist found named " + artist1_name)
+# 			if not artist2:
+# 				print("No artist found named " + artist2_name)
+# 			if not artist1 or not artist2:
+# 				sys.exit(1)
+#
+# 			print(artist1.id)
+# 			print(artist2.id)
+#
+# 			print("Calculating...")
+#
+# 			id_path, _ = await bi_bfs(artist1, artist2)
+# 			name_path = await get_name_path(id_path)
+# 			if name_path:
+# 				print(" <-> ".join(name_path))
+# 			else:
+# 				print("No connection found!")
+#
+# 			await clients.spotify.close()
+#
+# 			print()
+# 			answer = input("Run again? y/n: ")
+# 			if answer == "y":
+# 				should_continue = True
+# 			else:
+# 				should_continue = False
+# 		else:
+# 			print("Error with client ID and/or secret")
+# 			break
+#
+#
+# async def run_with_artists(list1, list2):
+# 	clients.redis = redis.Redis()
+#
+# 	# set spotify client ID and secret in environment variables
+# 	client_ID = ""
+# 	client_secret = ""
+# 	try:
+# 		client_ID = os.environ.get("SIX_DEGREES_CLIENT_ID")
+# 		client_secret = os.environ.get("SIX_DEGREES_CLIENT_SECRET")
+# 	except KeyError as e:
+# 		print("You must set the client ID and secret in SIX_DEGREES_CLIENT_ID and SIX_DEGREES_CLIENT_SECRET (environment variables)")
+#
+# 	# get input and run search
+# 	if client_ID and client_secret:
+# 		clients.spotify = spotify.Client(client_ID, client_secret)
+#
+# 		pairs = list(itertools.product(list1, list2))
+# 		# pairs = list(itertools.combinations(list1, 2))
+# 		for p in pairs:
+# 			artist1 = await get_artist(p[0])
+# 			artist2 = await get_artist(p[1])
+# 			id_path, _ = await bi_bfs(artist1, artist2)
+# 			name_path = await get_name_path(id_path)
+# 			if name_path:
+# 				print(artist1.name+"..."+artist2.name+": " + " <-> ".join(name_path))
+# 			else:
+# 				print(artist1.name+"..."+artist2.name+": no connection")
+#
+# 		await clients.spotify.close()
 
-	while should_continue:
 
-		# set client ID and secret in environment variables
-		client_ID = ""
-		client_secret = ""
-		try:
-			client_ID = os.environ.get("SIX_DEGREES_CLIENT_ID")
-			client_secret = os.environ.get("SIX_DEGREES_CLIENT_SECRET")
-		except KeyError as e:
-			print("You must set the client ID and secret in SIX_DEGREES_CLIENT_ID and SIX_DEGREES_CLIENT_SECRET (environment variables)")
-			break
-
-		# get input and run search
-		if client_ID and client_secret:
-			clients.spotify = spotify.Client(client_ID, client_secret)
-
-			artist1_name = ""
-			artist2_name = ""
-
-			# allow command line input instead of console
-			if len(sys.argv) == 1:
-				artist1_name = input("Enter an artist: ")
-				artist2_name = input("Enter another artist: ")
-
-			artist1 = await get_artist(artist1_name)
-			artist2 = await get_artist(artist2_name)
-
-			if not artist1:
-				print("No artist found named " + artist1_name)
-			if not artist2:
-				print("No artist found named " + artist2_name)
-			if not artist1 or not artist2:
-				sys.exit(1)
-
-			print(artist1.id)
-			print(artist2.id)
-
-			print("Calculating...")
-
-			id_path, _ = await bi_bfs(artist1, artist2)
-			name_path = await get_name_path(id_path)
-			if name_path:
-				print(" <-> ".join(name_path))
-			else:
-				print("No connection found!")
-
-			await clients.spotify.close()
-
-			print()
-			answer = input("Run again? y/n: ")
-			if answer == "y":
-				should_continue = True
-			else:
-				should_continue = False
-		else:
-			print("Error with client ID and/or secret")
-			break
-
-
-async def run_with_artists(list1, list2):
-	clients.redis = redis.Redis()
-
-	# set spotify client ID and secret in environment variables
-	client_ID = ""
-	client_secret = ""
-	try:
-		client_ID = os.environ.get("SIX_DEGREES_CLIENT_ID")
-		client_secret = os.environ.get("SIX_DEGREES_CLIENT_SECRET")
-	except KeyError as e:
-		print("You must set the client ID and secret in SIX_DEGREES_CLIENT_ID and SIX_DEGREES_CLIENT_SECRET (environment variables)")
-
-	# get input and run search
-	if client_ID and client_secret:
-		clients.spotify = spotify.Client(client_ID, client_secret)
-
-		pairs = list(itertools.product(list1, list2))
-		# pairs = list(itertools.combinations(list1, 2))
-		for p in pairs:
-			artist1 = await get_artist(p[0])
-			artist2 = await get_artist(p[1])
-			id_path, _ = await bi_bfs(artist1, artist2)
-			name_path = await get_name_path(id_path)
-			if name_path:
-				print(artist1.name+"..."+artist2.name+": " + " <-> ".join(name_path))
-			else:
-				print(artist1.name+"..."+artist2.name+": no connection")
-
-		await clients.spotify.close()
-
-
-if __name__ == '__main__':
-	# 1960s
-	# list1 = ['Beatles', 'Rolling Stones', 'Bob Dylan', 'Led Zeppelin', 'Johnny Hallyday', 'Bee Gees', 'Pink Floyd', 'Cher', 'Fleetwood Mac', 'Jackson 5']
-
-	# 1980s
-	# list1 = ['Michael Jackson', 'Madonna', 'u2', 'queen', 'ac/dc', 'bruce springsteen', 'bon jovi', 'george michael', 'billy joel', 'Guns n Roses']
-
-	# 1990s
-	# list1 = ['celine dion', 'mariah carey', 'whitney houston', 'nirvana', 'michael jackson', 'backstreet boys', 'metallica', 'madonna', 'shania twain', 'guns n roses']
-
-	# 2000s
-	# list1 = ['eminem', 'linkin park', 'britney spears', 'coldplay', 'p!nk', 'norah jones', 'nickelback', 'beyonce', 'black eyed peas', 'alicia keys']
-
-	# 2010s
-	# list2 = ['adele', 'drake', 'rihanna', 'bruno mars', 'ed sheeran', 'one direction', 'justin bieber', 'taylor swift', 'eminem', 'katy perry']
-
-	loop = asyncio.get_event_loop()
-	# loop.set_debug(True)
-	loop.run_until_complete(main())
-	# loop.run_until_complete(run_with_artists(list1, list2))
+# if __name__ == '__main__':
+# 	# 1960s
+# 	# list1 = ['Beatles', 'Rolling Stones', 'Bob Dylan', 'Led Zeppelin', 'Johnny Hallyday', 'Bee Gees', 'Pink Floyd', 'Cher', 'Fleetwood Mac', 'Jackson 5']
+#
+# 	# 1980s
+# 	# list1 = ['Michael Jackson', 'Madonna', 'u2', 'queen', 'ac/dc', 'bruce springsteen', 'bon jovi', 'george michael', 'billy joel', 'Guns n Roses']
+#
+# 	# 1990s
+# 	# list1 = ['celine dion', 'mariah carey', 'whitney houston', 'nirvana', 'michael jackson', 'backstreet boys', 'metallica', 'madonna', 'shania twain', 'guns n roses']
+#
+# 	# 2000s
+# 	# list1 = ['eminem', 'linkin park', 'britney spears', 'coldplay', 'p!nk', 'norah jones', 'nickelback', 'beyonce', 'black eyed peas', 'alicia keys']
+#
+# 	# 2010s
+# 	# list2 = ['adele', 'drake', 'rihanna', 'bruno mars', 'ed sheeran', 'one direction', 'justin bieber', 'taylor swift', 'eminem', 'katy perry']
+#
+# 	loop = asyncio.get_event_loop()
+# 	# loop.set_debug(True)
+# 	loop.run_until_complete(main())
+# 	# loop.run_until_complete(run_with_artists(list1, list2))
